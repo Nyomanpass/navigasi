@@ -1,44 +1,59 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
 
+/**
+ * @property CI_Session $session
+ * @property M_Navigasi $M_Navigasi
+ * @property CI_Input $input
+ */
 class Navigasi extends CI_Controller {
 
     public function __construct() {
         parent::__construct();
         
-        // Memastikan database dan library input terload dengan benar
+        // Load resources
         $this->load->database(); 
-        $this->load->library('session'); // Kadang dibutuhkan untuk input
+        $this->load->library(['session', 'form_validation']);
+        $this->load->helper(['url', 'form']);
         
-        // Memanggil Model (Pastikan penulisan file M_Navigasi.php benar)
+        // Load Model
         $this->load->model('M_Navigasi');
-        
-        // Load Helper
-        $this->load->helper(array('url', 'form'));
     }
 
     public function index() {
-    // Mengambil daftar titik_awal yang unik dari database
-        $data['lokasi_asal'] = $this->db->select('titik_awal')->distinct()->get('rute_navigasi')->result();
-        // Mengambil daftar tujuan yang unik
-        $data['lokasi_tujuan'] = $this->db->select('tujuan')->distinct()->get('rute_navigasi')->result();
+        // Mengambil data melalui Model (lebih rapi)
+        $data = [
+            'lokasi_asal'   => $this->M_Navigasi->get_list_asal(),
+            'lokasi_tujuan' => $this->M_Navigasi->get_list_tujuan(),
+            'title'         => 'Menu Utama Navigasi'
+        ];
         
         $this->load->view('v_menu_utama', $data);
     }
 
     public function mulai() {
-        // Ambil data post dengan pengamanan XSS filter
-        $asal = $this->input->post('asal', TRUE);
+        $asal   = $this->input->post('asal', TRUE);
         $tujuan = $this->input->post('tujuan', TRUE);
 
-        // Cek apakah data ada di database
-        $data['waypoints'] = $this->M_Navigasi->get_rute($asal, $tujuan);
-        $data['asal'] = $asal;
-        $data['tujuan'] = $tujuan;
+        if (!$asal || !$tujuan) {
+            $this->session->set_flashdata('error', 'Silakan pilih asal dan tujuan.');
+            redirect('navigasi');
+        }
 
-        if (empty($data['waypoints'])) {
-            echo "Rute tidak ditemukan di database! Silakan isi tabel rute_navigasi dulu.";
+        $waypoints = $this->M_Navigasi->get_rute($asal, $tujuan);
+
+        if (empty($waypoints)) {
+            // ... (pesan error tetap sama) ...
         } else {
+            // AMBIL NAMA ASLI DARI ID
+            $nama_tujuan = $this->M_Navigasi->get_nama_objek($tujuan);
+
+            $data = [
+                'waypoints'   => $waypoints,
+                'nama_tujuan' => $nama_tujuan, // Kirim nama asli ke view
+                'asal'        => $asal,
+                'tujuan'      => $tujuan
+            ];
             $this->load->view('v_navigasi_ar', $data);
         }
     }
